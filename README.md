@@ -1,3 +1,21 @@
+Fork doc
+========
+
+This version with using params in GET request.
+
+Use branch `params` for get this rest version. This branch begins from `5.10` tag original package.
+
+Updated get method looks like:
+
+```erlang
+get(Params) -> ets:tab2list(users).
+get(Id, Params) -> [User] = ets:lookup(users, wf:to_list(Id)), User.
+```
+
+
+Docs from original:
+-------------------
+
 REST: framework with typed JSON
 ===============================
 
