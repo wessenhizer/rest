@@ -1,6 +1,10 @@
 -module(rest_cowboy).
 -author('Dmitry Bushmelev').
--record(st, {resource_module = undefined :: atom(), resource_id = undefined :: binary()}).
+-record(st, {
+    resource_module = undefined :: atom(),
+    resource_id = undefined :: binary(),
+    params = [] :: [{binary(), binary() | true}]
+}).
 -export([init/3, rest_init/2, resource_exists/2, allowed_methods/2, content_types_provided/2,
          to_html/2, to_json/2, content_types_accepted/2, delete_resource/2,
          handle_urlencoded_data/2, handle_json_data/2]).
@@ -17,7 +21,8 @@ rest_init(Req, _Opts) ->
     {Id, Req2} = cowboy_req:binding(id, Req1),
     {Origin, Req3} = cowboy_req:header(<<"origin">>, Req2, <<"*">>),
     Req4 = cowboy_req:set_resp_header(<<"Access-Control-Allow-Origin">>, Origin, Req3),
-    {ok, Req4, #st{resource_module = Module, resource_id = Id}}.
+    {Params, Req5} = cowboy_req:qs_vals(Req4),
+    {ok, Req5, #st{resource_module = Module, resource_id = Id, params = Params}}.
 
 resource_exists(Req, #st{resource_module = undefined} = State)       -> {false, Req, State};
 resource_exists(Req, #st{resource_id     = undefined} = State)       -> {true, Req, State};
@@ -32,10 +37,10 @@ content_types_provided(Req, #st{resource_module = M} = State) ->
          false -> [{<<"application/json">>, to_json}] end,
      Req, State}.
 
-to_html(Req, #st{resource_module = M, resource_id = Id} = State) ->
+to_html(Req, #st{resource_module = M, resource_id = Id, params = P} = State) ->
     Body = case Id of
-               undefined -> [M:to_html(Resource) || Resource <- M:get()];
-               _ -> M:to_html(M:get(Id)) end,
+               undefined -> [M:to_html(Resource) || Resource <- M:get(P)];
+               _ -> M:to_html(M:get(Id, P)) end,
     Html = case erlang:function_exported(M, html_layout, 2) of
                true  -> M:html_layout(Req, Body);
                false -> default_html_layout(Body) end,
@@ -43,10 +48,10 @@ to_html(Req, #st{resource_module = M, resource_id = Id} = State) ->
 
 default_html_layout(Body) -> [<<"<html><body>">>, Body, <<"</body></html>">>].
 
-to_json(Req, #st{resource_module = M, resource_id = Id} = State) ->
+to_json(Req, #st{resource_module = M, resource_id = Id, params = P} = State) ->
     Struct = case Id of
-                 undefined -> [{M, [ M:to_json(Resource) || Resource <- M:get() ] } ];
-                 _         -> M:to_json(M:get(Id)) end,
+                 undefined -> [{M, [ M:to_json(Resource) || Resource <- M:get(P) ] } ];
+                 _         -> M:to_json(M:get(Id, P)) end,
     {iolist_to_binary(?REST_JSON:encode(Struct)), Req, State}.
 
 content_types_accepted(Req, State) -> {[{<<"application/x-www-form-urlencoded">>, handle_urlencoded_data},
